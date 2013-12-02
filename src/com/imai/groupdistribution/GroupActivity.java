@@ -2,6 +2,7 @@ package com.imai.groupdistribution;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 
 import android.os.Bundle;
 import android.app.Activity;
@@ -12,38 +13,97 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ListView;
 import android.widget.TextView;
 
 public class GroupActivity extends Activity {
 
+	private static final int GROUP_MAX_NUM = 4;
+	private String snsStr;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_group);
-		ListView listView = (ListView) findViewById(R.id.listView1);
+		ListView listView = (ListView) findViewById(R.id.groupList);
+		Button snsBtn = (Button) findViewById(R.id.snsBtn);
 
 		Intent intent = getIntent();
-		ArrayList<String> allNameList = new ArrayList<String>();
-		SampleAdapter addNameList = new SampleAdapter(this);
+		ArrayList<String> allNameList = intent.getStringArrayListExtra("list");
 
-		allNameList = intent.getStringArrayListExtra("list");
+		SampleAdapter addNameList = new SampleAdapter(this);
 
 		Collections.shuffle(allNameList);
 
+		//出席人数からグループ数をもとめて、グループNoをハッシュキーにして
+		//ひとりずつ別グループに振り分けていく
+		HashMap<Integer, ArrayList<String>> nameMap = new HashMap<Integer, ArrayList<String>>();
+
+		//グループ最大人数(デフォは4名)からグループ数を求める
 		int groupNum = 0;
+		if ((allNameList.size() % GROUP_MAX_NUM) == 0) {
+			//グループ最大人数で割り切れた場合は商がそのままグループ数に
+			groupNum = allNameList.size() / GROUP_MAX_NUM;
+		} else {
+			//グループ最大人数で割り切れない場合は商+1がグループ数に
+			groupNum = allNameList.size() / GROUP_MAX_NUM + 1;
+		}
+
+		//HashMapにグループ数分のArrayListをつないでおく
+		for (int i = 0; i < groupNum; i++) {
+			//keyは0からグループ数-1
+			nameMap.put(i, new ArrayList<String>());
+		}
+
+		//出席者をグループに振り分ける処理
+		//グループ1←出席者1, グループ2←出席者2, グループ3←出席者3, , グループ4←出席者4
+		//グループ1←出席者5, グループ2←出席者6, グループ3←出席者7, , グループ4←出席者8
+		//という振り分け方
+		ArrayList<String> tempList;
+		int groupIndex = 0;
 		for (int i = 0; i < allNameList.size(); i++) {
-			if (i % 4 == 0) {
-				groupNum++;
-				addNameList.add(new BindData("グループ" + groupNum, false));
+			tempList = nameMap.get(groupIndex);
+			tempList.add(allNameList.get(i));
+
+			groupIndex++;
+			if (groupIndex >= groupNum) {
+				groupIndex = 0;
 			}
-			addNameList.add(new BindData(allNameList.get(i), true));
-			Log.i("debug", allNameList.get(i));
+		}
+
+		//グループ番号順にリストに表示する
+		//同時にSNS投稿用テキスト作成
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < groupNum; i++) {
+			tempList = nameMap.get(i);
+			addNameList.add(new BindData("[グループ" + (i + 1) + "]", false));
+			sb.append("[グループ" + (i + 1) + "]\n");
+
+			for (int j = 0; j < tempList.size(); j++) {
+				addNameList.add(new BindData(tempList.get(j), true));
+				sb.append(tempList.get(j) + "\n");
+			}
+
 		}
 		listView.setAdapter(addNameList);
+		snsStr = new String(sb); 
 
+		snsBtn.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View v) {
+				// TODO 自動生成されたメソッド・スタブ
+				Intent intent = new Intent();
+				intent.setAction(Intent.ACTION_SEND);
+				intent.setType("text/plain");
+				intent.putExtra(Intent.EXTRA_TEXT, snsStr);
+				startActivity(intent);
+			}
+		});
 	}
 
 	@Override
@@ -109,7 +169,6 @@ public class GroupActivity extends Activity {
 			if (bindData.mIsContent) {
 				holder.mTextView.setBackgroundColor(Color.BLACK);
 			}
-
 			// ﾗﾍﾞﾙﾉ処理
 			else {
 				holder.mTextView.setBackgroundColor(Color.DKGRAY);
